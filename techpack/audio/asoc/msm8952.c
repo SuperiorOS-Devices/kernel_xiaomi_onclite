@@ -1,5 +1,5 @@
-/* Copyright (c) 2015-2016, 2018, 2020, The Linux Foundation.
- * All rights reserved.
+/* Copyright (c) 2015-2016, 2018, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2020 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -87,9 +87,14 @@ static struct wcd_mbhc_config mbhc_cfg = {
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = false,
 	.key_code[0] = KEY_MEDIA,
-	.key_code[1] = KEY_VOICECOMMAND,
+        .key_code[1] = KEY_VOICECOMMAND,
+#if 1
+	.key_code[2] = BTN_1,
+	.key_code[3] = BTN_2,
+#else
 	.key_code[2] = KEY_VOLUMEUP,
 	.key_code[3] = KEY_VOLUMEDOWN,
+#endif
 	.key_code[4] = 0,
 	.key_code[5] = 0,
 	.key_code[6] = 0,
@@ -162,6 +167,59 @@ static void param_set_mask(struct snd_pcm_hw_params *p, int n,
 		m->bits[1] = 0;
 		m->bits[bit >> 5] |= (1 << (bit & 31));
 	}
+}
+extern unsigned char aw87329_audio_kspk(void);
+extern unsigned char aw87329_audio_drcv(void);
+extern unsigned char aw87329_audio_off(void);
+static int aw87329_kspk_control = 0;
+static int aw87329_drcv_control = 0;
+static const char *const ext_kspk_amp_function[] = { "Off", "On" };
+static const char *const ext_drcv_amp_function[] = { "Off", "On" };
+static int ext_kspk_amp_get(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = aw87329_kspk_control;
+	pr_err("%s: aw87329_kspk_control = %d\n", __func__,
+	aw87329_kspk_control);
+	return 0;
+}
+static int ext_kspk_amp_put(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
+{
+	if(ucontrol->value.integer.value[0] == aw87329_kspk_control)
+		return 1;
+	aw87329_kspk_control = ucontrol->value.integer.value[0];
+	pr_err("%s: ext_kspk_amp_put = %d\n", __func__,
+	aw87329_kspk_control);
+	if(ucontrol->value.integer.value[0]) {
+		aw87329_audio_kspk();
+	} else {
+		aw87329_audio_off();
+	}
+	pr_err("%s: value.integer.value = %ld\n", __func__,
+	ucontrol->value.integer.value[0]);
+	return 0;
+}
+static int ext_drcv_amp_get(struct snd_kcontrol *kcontrol,
+struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = aw87329_drcv_control;
+	pr_err("%s: aw87329_drcv_control = %d\n", __func__,
+	aw87329_drcv_control);
+	return 0;
+}
+static int ext_drcv_amp_put(struct snd_kcontrol *kcontrol,
+struct snd_ctl_elem_value *ucontrol)
+{
+	aw87329_drcv_control = ucontrol->value.integer.value[0];
+	if(ucontrol->value.integer.value[0] == aw87329_drcv_control)
+		return 1;
+	if(ucontrol->value.integer.value[0]) {
+		aw87329_audio_drcv();
+	} else {
+	aw87329_audio_off();
+	}
+	pr_debug("%s: value.integer.value = %ld\n", __func__,
+	ucontrol->value.integer.value[0]);
+	return 0;
 }
 
 static int msm8952_mclk_event(struct snd_soc_dapm_widget *w,
@@ -1052,6 +1110,10 @@ static const struct soc_enum msm_snd_enum[] = {
 				vi_feed_ch_text),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(mi2s_rx_sample_rate_text),
 				mi2s_rx_sample_rate_text),
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_kspk_amp_function),
+				ext_kspk_amp_function),
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_drcv_amp_function),
+				ext_drcv_amp_function),
 };
 
 static const struct snd_kcontrol_new msm_snd_controls[] = {
@@ -1071,6 +1133,10 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_vi_feed_tx_ch_get, msm_vi_feed_tx_ch_put),
 	SOC_ENUM_EXT("MI2S_RX SampleRate", msm_snd_enum[6],
 			mi2s_rx_sample_rate_get, mi2s_rx_sample_rate_put),
+	SOC_ENUM_EXT("Ext_Speaker_Amp", msm_snd_enum[7],
+		ext_kspk_amp_get, ext_kspk_amp_put),
+	SOC_ENUM_EXT("Ext_Receiver_Amp", msm_snd_enum[8],
+		ext_drcv_amp_get, ext_drcv_amp_put),
 };
 
 static int msm8952_enable_wsa_mclk(struct snd_soc_card *card, bool enable)
@@ -1517,7 +1583,7 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 		return NULL;
 
 #define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(msm8952_wcd_cal)->X) = (Y))
-	S(v_hs_max, 1500);
+	S(v_hs_max, 1700);
 #undef S
 #define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(msm8952_wcd_cal)->X) = (Y))
 	S(num_btn, WCD_MBHC_DEF_BUTTONS);
@@ -2122,13 +2188,12 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.ignore_pmdown_time = 1,
 	},
 	{/* hw:x,27 */
-		.name = "MSM8X16 MultiMedia10",
-		.stream_name = "MultiMedia10",
+		.name = "MSM8X16 Compress3",
+		.stream_name = "Compress3",
 		.cpu_dai_name	= "MultiMedia10",
 		.platform_name  = "msm-pcm-dsp.1",
 		.dynamic = 1,
 		.dpcm_playback = 1,
-		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
 			 SND_SOC_DPCM_TRIGGER_POST},
 		.codec_dai_name = "snd-soc-dummy-dai",
@@ -2348,24 +2413,6 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA19,
-	},
-	{/* hw:x,41 */
-		.name = "MSM8x16 Haptic Audio",
-		.stream_name = "MultiMedia30",
-		.cpu_dai_name   = "MultiMedia30",
-		.platform_name  = "msm-pcm-dsp.1",
-		.dynamic = 1,
-		.dpcm_playback = 1,
-		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE |
-			 ASYNC_DPCM_SND_SOC_HW_PARAMS,
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			 SND_SOC_DPCM_TRIGGER_POST},
-		.ignore_suspend = 1,
-		/* this dainlink has playback support */
-		.ignore_pmdown_time = 1,
-		.id = MSM_FRONTEND_DAI_MULTIMEDIA30,
 	},
 	/* Backend I2S DAI Links */
 	{
@@ -2627,33 +2674,6 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.id = MSM_BACKEND_DAI_QUINARY_MI2S_TX,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ops = &msm8952_quin_mi2s_be_ops,
-		.ignore_suspend = 1,
-	},
-	/* Proxy Tx BACK END DAI Link */
-	{
-		.name = LPASS_BE_PROXY_TX,
-		.stream_name = "Proxy Capture",
-		.cpu_dai_name = "msm-dai-q6-dev.8195",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
-		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_PROXY_TX,
-		.ignore_suspend = 1,
-	},
-	/* Proxy Rx BACK END DAI Link */
-	{
-		.name = LPASS_BE_PROXY_RX,
-		.stream_name = "Proxy Playback",
-		.cpu_dai_name = "msm-dai-q6-dev.8194",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_PROXY_RX,
-		.ignore_pmdown_time = 1,
 		.ignore_suspend = 1,
 	},
 };
@@ -3015,19 +3035,17 @@ static int msm8952_asoc_machine_probe(struct platform_device *pdev)
 	const char *ext_pa = "qcom,msm-ext-pa";
 	const char *mclk = "qcom,msm-mclk-freq";
 	const char *wsa = "asoc-wsa-codec-names";
+	const char *wsa_prefix = "asoc-wsa-codec-prefixes";
 	const char *type = NULL;
 	const char *ext_pa_str = NULL;
+	const char *wsa_str = NULL;
+	const char *wsa_prefix_str = NULL;
 	const char *spk_ext_pa = "qcom,msm-spk-ext-pa";
 	int num_strings;
 	int id, i, val;
 	int ret = 0;
 	struct resource *muxsel;
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X_ANALOG)
-	const char *wsa_prefix = "asoc-wsa-codec-prefixes";
-	const char *wsa_str = NULL;
-	const char *wsa_prefix_str = NULL;
 	char *temp_str = NULL;
-#endif
 
 	pdata = devm_kzalloc(&pdev->dev,
 				sizeof(struct msm_asoc_mach_data),
@@ -3109,7 +3127,6 @@ parse_mclk_freq:
 	/*reading the gpio configurations from dtsi file*/
 	num_strings = of_property_count_strings(pdev->dev.of_node,
 			wsa);
-#if IS_ENABLED(CONFIG_SND_SOC_WSA881X_ANALOG)
 	if (num_strings > 0) {
 		if (wsa881x_get_probing_count() < 2) {
 			ret = -EPROBE_DEFER;
@@ -3175,7 +3192,6 @@ parse_mclk_freq:
 			msm_anlg_cdc_update_int_spk_boost(false);
 		}
 	}
-#endif
 
 	card = msm8952_populate_sndcard_dailinks(&pdev->dev);
 	dev_dbg(&pdev->dev, "default codec configured\n");

@@ -473,7 +473,7 @@ config TCP_CONG_BIC
 
 config TCP_CONG_CUBIC
 	tristate "CUBIC TCP"
-	default y
+	default n
 	---help---
 	This is version 2.0 of BIC-TCP which uses a cubic growth function
 	among other techniques.
@@ -643,7 +643,7 @@ config TCP_CONG_CDG
 
 config TCP_CONG_BBR
 	tristate "BBR TCP"
-	default n
+	default y
 	---help---
 
 	BBR (Bottleneck Bandwidth and RTT) TCP congestion control aims to
@@ -691,15 +691,13 @@ choice
 		bool "CDG" if TCP_CONG_CDG=y
 
 	config DEFAULT_BBR
-		bool "BBR" if TCP_CONG_BBR=y
+		bool "BBR"
 
-	config DEFAULT_RENO
-		bool "Reno"
 endchoice
 
 endif
 
-config TCP_CONG_CUBIC
+config TCP_CONG_BBR
 	tristate
 	depends on !TCP_CONG_ADVANCED
 	default y
@@ -716,8 +714,7 @@ config DEFAULT_TCP_CONG
 	default "reno" if DEFAULT_RENO
 	default "dctcp" if DEFAULT_DCTCP
 	default "cdg" if DEFAULT_CDG
-	default "bbr" if DEFAULT_BBR
-	default "cubic"
+	default "bbr"
 
 config TCP_MD5SIG
 	bool "TCP: MD5 Signature Option support (RFC2385)"

@@ -46,6 +46,7 @@
 		qcom,ulps-enabled;
 		qcom,suspend-ulps-enabled;
 		qcom,panel-allow-phy-poweroff;
+		qcom,mdss-dsi-panel-jitter = <0x08 0xa>;
 		qcom,mdss-dsi-on-command = [
 				39 01 00 00 00 00 04 B9 FF 83 94
 				39 01 00 00 00 00 02 35 00
